@@ -1,0 +1,21 @@
+# secrets & local data — never commit
+backend/.env
+backend/data/
+*.db
+
+# installs & builds (recreated by setup)
+backend/.venv/
+frontend/node_modules/
+frontend/dist/
+**/__pycache__/
+*.pyc
+
+# benchmark outputs and downloaded datasets
+backend/bench/results/
+backend/bench/data/averitec_dev.json
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
