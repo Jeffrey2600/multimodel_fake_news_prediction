@@ -12,6 +12,16 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+try:  # free Gradio Spaces run on ZeroGPU, which requires one declared GPU function at start-up
+    import spaces
+
+    @spaces.GPU(duration=1)
+    def _zerogpu_placeholder():
+        """Never called: TruthLens does not use the GPU."""
+        return None
+except ImportError:  # running outside Hugging Face
+    pass
+
 REPO_ZIP = "https://github.com/Jeffrey2600/multimodel_fake_news_prediction/archive/refs/heads/main.zip"
 WORK = Path("/tmp/truthlens")
 
