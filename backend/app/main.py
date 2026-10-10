@@ -213,11 +213,16 @@ def shared(share_id: str):
 
 
 # ------------------------------------------------------------------ serve built frontend
-_dist = config.BASE_DIR.parent / "frontend" / "dist"
+_dist = (config.BASE_DIR.parent / "frontend" / "dist").resolve()
 if _dist.exists():
     app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
 
     @app.get("/{path:path}")
     def spa(path: str):
-        f = _dist / path
-        return FileResponse(f if path and f.is_file() else _dist / "index.html")
+        if path.startswith("api/"):
+            raise HTTPException(404, "Not found.")
+        f = (_dist / path).resolve()
+        # only files inside the built web app may be served (blocks ../ traversal)
+        if path and f.is_file() and f.is_relative_to(_dist):
+            return FileResponse(f)
+        return FileResponse(_dist / "index.html")

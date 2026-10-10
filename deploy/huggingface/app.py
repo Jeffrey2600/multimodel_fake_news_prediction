@@ -19,6 +19,12 @@ try:  # free Gradio Spaces run on ZeroGPU, which requires one declared GPU funct
     def _zerogpu_placeholder():
         """Never called: TruthLens does not use the GPU."""
         return None
+
+    # ZeroGPU normally reports start-up from inside gradio's launch(); we run our own server.
+    import spaces.zero
+
+    if hasattr(spaces.zero, "startup"):
+        spaces.zero.startup()
 except ImportError:  # running outside Hugging Face
     pass
 

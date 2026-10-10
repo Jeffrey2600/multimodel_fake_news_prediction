@@ -112,6 +112,15 @@ def test_auth_history_share_flow():
     assert vid not in {h["verification_id"] for h in c.get("/api/history", headers=auth).json()}
 
 
+def test_no_path_traversal():
+    secret = (Path(__file__).resolve().parent.parent / "app" / "config.py").read_text(encoding="utf-8")[:40]
+    for p in ["/../backend/app/config.py", "/..%2F..%2Fbackend%2Fapp%2Fconfig.py", "/%2e%2e/%2e%2e/backend/app/config.py",
+              "/file=../../backend/app/config.py", "/assets/../../../backend/app/config.py"]:
+        r = c.get(p)
+        assert secret not in r.text, f"leaked via {p}"
+    assert c.get("/api/does-not-exist").status_code == 404
+
+
 def test_credibility_tiers():
     assert credibility.tier_of("https://www.pib.gov.in/x") == "official"
     assert credibility.tier_of("https://factcheck.afp.com/x") == "factcheck"
