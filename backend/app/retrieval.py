@@ -218,19 +218,33 @@ def _rank(items: list, terms: dict) -> list:
     return sorted(items, key=key, reverse=True)
 
 
-async def gather_evidence(claim: dict, use_llm: bool) -> dict:
-    """Collect evidence for one claim from every configured source."""
+async def _bounded(coro, seconds: float, default):
+    """Never let one slow search or site stall the whole check."""
+    try:
+        return await asyncio.wait_for(coro, seconds)
+    except Exception as e:  # timeout or failure -> treat as no results
+        log.info("evidence task gave up: %s", type(e).__name__)
+        return default
+
+
+async def gather_evidence(claim: dict, use_llm: bool, many: bool = False) -> dict:
+    """Collect evidence for one claim from every configured source.
+
+    many=True (content with several claims) runs fewer searches and reads fewer pages per claim,
+    so a long article stays fast on small servers.
+    """
     text = claim["text"]
     q1 = (claim.get("search_query") or text).strip()
     queries = [q1]
-    if text.lower() != q1.lower():
+    if not many and text.lower() != q1.lower():
         queries.append(text[:220])
     queries.append(f"{q1} fact check")
     terms = _terms(text)
 
-    tasks = [web_search(q) for q in queries] + [wikipedia(q1), newsapi(q1)]
+    tasks = [_bounded(web_search(q), 25, []) for q in queries] + [_bounded(wikipedia(q1), 15, []),
+                                                                  _bounded(newsapi(q1), 15, [])]
     if use_llm and llm.grounding_available():
-        tasks.append(grounded(text))
+        tasks.append(_bounded(grounded(text), 60, ("", [], [])))
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     brief, g_items, errors = "", [], []
@@ -247,9 +261,10 @@ async def gather_evidence(claim: dict, use_llm: bool) -> dict:
     items = _rank(items, terms)[:12]
 
     # read the top articles in full and keep the passages that discuss the claim
-    to_fetch = [it for it in items if it["domain"] not in _SKIP_FETCH and it.get("via") != "Wikipedia"][:7]
+    n_fetch = 4 if many else 7
+    to_fetch = [it for it in items if it["domain"] not in _SKIP_FETCH and it.get("via") != "Wikipedia"][:n_fetch]
     async with httpx.AsyncClient(headers={"User-Agent": UA, "Accept-Language": "en"}) as c:
-        await asyncio.gather(*[_fetch_passage(c, it, terms) for it in to_fetch])
+        await _bounded(asyncio.gather(*[_fetch_passage(c, it, terms) for it in to_fetch]), 30, None)
     for i, it in enumerate(items):
         it["id"] = f"E{i + 1}"
     return {"brief": brief, "items": items, "queries": queries, "errors": errors}

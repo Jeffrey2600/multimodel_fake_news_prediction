@@ -20,6 +20,16 @@ for _noisy in ("primp", "httpx", "httpcore", "ddgs", "trafilatura", "google_gena
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 app = FastAPI(title="TruthLens API", version="1.0")
+
+
+@app.on_event("startup")
+async def _thread_pool():
+    # Searches, page parsing and OCR run in threads. Python's default pool scales with CPU count
+    # (about 6 threads on a 2-CPU host), which made multi-claim checks queue for minutes.
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=48))
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
                    allow_methods=["*"], allow_headers=["*"])
 db.init()
