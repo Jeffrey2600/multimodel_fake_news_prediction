@@ -11,6 +11,8 @@ sites, fact-checkers, official pages and Wikipedia for evidence, and gives a pla
 | ✕ **Fake** | Reliable sources show this isn't true |
 | ? **Can't confirm** | Not enough reliable information yet to say either way |
 
+**Live demo:** https://jeffrey2600-truthlens.hf.space
+
 Every report shows how sure the system is, the sources that back the claim and the ones that contradict it,
 and "things to watch out for" — missing context, slanted language and details that were left out.
 
@@ -159,7 +161,8 @@ The app ships as one Docker image (API + web app on port 7860).
 from `deploy/huggingface/` (`app.py`, `requirements.txt`, `packages.txt`, `README.md`), and add a secret
 `GEMINI_API_KEY` in *Settings → Variables and secrets*. The Space downloads the latest code from this GitHub repo
 each time it starts, so after pushing new code just use *Restart this Space*. Free Spaces sleep after 48 hours
-without visitors and wake up in about a minute on the next visit.
+without visitors; the `Keep live demo awake` GitHub Action (`.github/workflows/keep-awake.yml`) visits the app
+every 6 hours so that never happens. Data stored in the Space (history, accounts) resets when the Space restarts.
 
 The pre-built web app is committed in `frontend/dist`, so hosting (and running locally) works without Node.js.
 Rebuild it with `npm run build` in `frontend/` after changing the UI.
