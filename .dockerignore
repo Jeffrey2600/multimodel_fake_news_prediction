@@ -1,7 +1,6 @@
 **/.venv
 **/node_modules
 **/__pycache__
-frontend/dist
 backend/.env
 backend/data
 backend/bench/results

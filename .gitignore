@@ -6,7 +6,6 @@ backend/data/
 # installs & builds (recreated by setup)
 backend/.venv/
 frontend/node_modules/
-frontend/dist/
 **/__pycache__/
 *.pyc
 

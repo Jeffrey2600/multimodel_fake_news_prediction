@@ -155,10 +155,14 @@ automated reading (paywalled sites ask the user to paste the text instead).
 
 The app ships as one Docker image (API + web app on port 7860).
 
-**Hugging Face Spaces (free, recommended)** — create a Space with SDK *Docker*, add the two files from
-`deploy/huggingface/` (`Dockerfile`, `README.md`), and add a secret `GEMINI_API_KEY` in *Settings → Variables and
-secrets*. The Space builds straight from this GitHub repo; after pushing new code, use *Settings → Factory rebuild*.
-Free Spaces sleep after 48 hours without visitors and wake up in about a minute on the next visit.
+**Hugging Face Spaces (free, recommended)** — create a Space with SDK *Gradio* (free CPU), add the four files
+from `deploy/huggingface/` (`app.py`, `requirements.txt`, `packages.txt`, `README.md`), and add a secret
+`GEMINI_API_KEY` in *Settings → Variables and secrets*. The Space downloads the latest code from this GitHub repo
+each time it starts, so after pushing new code just use *Restart this Space*. Free Spaces sleep after 48 hours
+without visitors and wake up in about a minute on the next visit.
+
+The pre-built web app is committed in `frontend/dist`, so hosting (and running locally) works without Node.js.
+Rebuild it with `npm run build` in `frontend/` after changing the UI.
 
 **Any other Docker host** (Render, Railway, Fly.io, a VPS):
 
