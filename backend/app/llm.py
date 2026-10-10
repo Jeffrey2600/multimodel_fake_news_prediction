@@ -30,9 +30,9 @@ class GroundedAnswer:
     model: str = ""
 
 
-_client = None
+_clients: list | None = None
 _available: set | None = None
-_cooldown: dict[str, float] = {}
+_cooldown: dict[str, float] = {}   # "<key index>:<model>" -> time it may be used again
 _grounding_until = 0.0
 
 
@@ -44,16 +44,21 @@ def grounding_available() -> bool:
 
 
 def enabled() -> bool:
-    return bool(config.GEMINI_API_KEY)
+    return bool(config.GEMINI_API_KEYS)
+
+
+def clients() -> list:
+    """One client per configured key; each key (from a different Google project) has its own free quota."""
+    global _clients
+    if _clients is None:
+        if not enabled():
+            raise LLMUnavailable("GEMINI_API_KEY is not set")
+        _clients = [genai.Client(api_key=k) for k in config.GEMINI_API_KEYS]
+    return _clients
 
 
 def client() -> genai.Client:
-    global _client
-    if _client is None:
-        if not enabled():
-            raise LLMUnavailable("GEMINI_API_KEY is not set")
-        _client = genai.Client(api_key=config.GEMINI_API_KEY)
-    return _client
+    return clients()[0]
 
 
 async def _available_models() -> set:
@@ -91,39 +96,41 @@ async def _generate(contents, cfg: types.GenerateContentConfig, light=False, tim
     chain = await _chain(light)
     if prefer and prefer in await _available_models():
         chain = [prefer] if only else [prefer] + [m for m in chain if m != prefer]
-    for model in chain:
-        if _cooldown.get(model, 0) > loop.time():
-            continue
-        for attempt in range(2):
-            try:
-                resp = await asyncio.wait_for(
-                    client().aio.models.generate_content(model=model, contents=contents, config=cfg),
-                    timeout=timeout,
-                )
-                return resp, model
-            except Exception as e:
-                last = e
-                log.warning("gemini %s failed (attempt %d): %s", model, attempt + 1, str(e)[:200])
-                if not _retryable(e) and not isinstance(e, asyncio.TimeoutError):
-                    break
-                if "503" in str(e) or "UNAVAILABLE" in str(e):
-                    # overloaded: skip straight to the next model and rest this one briefly
-                    _cooldown[model] = loop.time() + 90
-                    break
-                if "PerDay" in str(e):
-                    # free-tier daily cap for this model: don't touch it again for hours
-                    _cooldown[model] = loop.time() + 6 * 3600
-                    log.warning("%s hit its daily quota; skipping it", model)
-                    break
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                    m = re.search(r"retry in ([\d.]+)s", str(e))
-                    wait = float(m.group(1)) if m else 20
-                    if wait > 25 or attempt == 1:
-                        _cooldown[model] = loop.time() + min(wait, 120)
+    for ki, cl in enumerate(clients()):
+        for model in chain:
+            ck = f"{ki}:{model}"
+            if _cooldown.get(ck, 0) > loop.time():
+                continue
+            for attempt in range(2):
+                try:
+                    resp = await asyncio.wait_for(
+                        cl.aio.models.generate_content(model=model, contents=contents, config=cfg),
+                        timeout=timeout,
+                    )
+                    return resp, model
+                except Exception as e:
+                    last = e
+                    log.warning("gemini %s failed (attempt %d): %s", model, attempt + 1, str(e)[:200])
+                    if not _retryable(e) and not isinstance(e, asyncio.TimeoutError):
                         break
-                    await asyncio.sleep(wait + 1)
-                else:
-                    await asyncio.sleep(2 + attempt * 3)
+                    if "503" in str(e) or "UNAVAILABLE" in str(e):
+                        # overloaded: skip straight to the next model and rest this one briefly
+                        _cooldown[ck] = loop.time() + 90
+                        break
+                    if "PerDay" in str(e):
+                        # free-tier daily cap for this model: don't touch it again for hours
+                        _cooldown[ck] = loop.time() + 6 * 3600
+                        log.warning("%s hit its daily quota; skipping it", model)
+                        break
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        m = re.search(r"retry in ([\d.]+)s", str(e))
+                        wait = float(m.group(1)) if m else 20
+                        if wait > 25 or attempt == 1:
+                            _cooldown[ck] = loop.time() + min(wait, 120)
+                            break
+                        await asyncio.sleep(wait + 1)
+                    else:
+                        await asyncio.sleep(2 + attempt * 3)
     raise LLMUnavailable(f"all Gemini models failed: {last}")
 
 

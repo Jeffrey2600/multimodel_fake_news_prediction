@@ -7,6 +7,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+# Several keys may be given comma-separated; when one runs out of daily quota the next is used.
+GEMINI_API_KEYS = [k.strip() for k in GEMINI_API_KEY.split(",") if k.strip()]
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY", "").strip()
 
 # Tried in order; anything the key can't see is skipped at startup.

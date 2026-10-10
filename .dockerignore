@@ -1,0 +1,9 @@
+**/.venv
+**/node_modules
+**/__pycache__
+frontend/dist
+backend/.env
+backend/data
+backend/bench/results
+backend/bench/data/averitec_dev.json
+.git

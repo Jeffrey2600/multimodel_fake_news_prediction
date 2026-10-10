@@ -151,6 +151,22 @@ Measured during development: **97.8 %** on the 45-claim hand-labelled set (100 %
 no true claim called fake or vice versa) and correct article extraction on roughly 80 % of news pages that allow
 automated reading (paywalled sites ask the user to paste the text instead).
 
+## Deploying online
+
+The app ships as one Docker image (API + web app on port 7860).
+
+**Hugging Face Spaces (free, recommended)** — create a Space with SDK *Docker*, add the two files from
+`deploy/huggingface/` (`Dockerfile`, `README.md`), and add a secret `GEMINI_API_KEY` in *Settings → Variables and
+secrets*. The Space builds straight from this GitHub repo; after pushing new code, use *Settings → Factory rebuild*.
+Free Spaces sleep after 48 hours without visitors and wake up in about a minute on the next visit.
+
+**Any other Docker host** (Render, Railway, Fly.io, a VPS):
+
+```bash
+docker build -t truthlens .
+docker run -p 7860:7860 -e GEMINI_API_KEY=your-key truthlens
+```
+
 ## Development mode
 
 Run the backend and the web app separately with live reload:
