@@ -11,7 +11,7 @@ sites, fact-checkers, official pages and Wikipedia for evidence, and gives a pla
 | ✕ **Fake** | Reliable sources show this isn't true |
 | ? **Can't confirm** | Not enough reliable information yet to say either way |
 
-**Live demo:** https://jeffrey2600-truthlens.hf.space
+**Live demo:** https://truthlens-check.netlify.app
 
 Every report shows how sure the system is, the sources that back the claim and the ones that contradict it,
 and "things to watch out for" — missing context, slanted language and details that were left out.
@@ -155,16 +155,20 @@ automated reading (paywalled sites ask the user to paste the text instead).
 
 ## Deploying online
 
-The app ships as one Docker image (API + web app on port 7860).
+The live demo is split in two:
 
-**Hugging Face Spaces (free, recommended)** — create a Space with SDK *Gradio* (free CPU), add the four files
-from `deploy/huggingface/` (`app.py`, `requirements.txt`, `packages.txt`, `README.md`), and add a secret
-`GEMINI_API_KEY` in *Settings → Variables and secrets*. The Space downloads the latest code from this GitHub repo
-each time it starts, so after pushing new code just use *Restart this Space*. Free Spaces sleep after 48 hours
-without visitors; the `Keep live demo awake` GitHub Action (`.github/workflows/keep-awake.yml`) visits the app
-every 6 hours so that never happens. Data stored in the Space (history, accounts) resets when the Space restarts.
+- **Website — Netlify** (`netlify.toml`). Netlify builds `frontend/` straight from this GitHub repo on every push.
+  `VITE_API_BASE` in `netlify.toml` tells the website where the API lives.
+- **API — Hugging Face Spaces** (free). Create a Space with SDK *Gradio* (free tier), add the four files from
+  `deploy/huggingface/` (`app.py`, `requirements.txt`, `packages.txt`, `README.md`) and a secret `GEMINI_API_KEY`
+  in *Settings → Variables and secrets*. The Space downloads the latest code from this repo each time it starts, so
+  after pushing backend changes use *Restart this Space*. The `Keep live demo awake` GitHub Action
+  (`.github/workflows/keep-awake.yml`) visits it every 6 hours so the free tier never puts it to sleep.
+  The API accepts requests from `*.netlify.app` sites and from any origins listed in `ALLOWED_ORIGINS`.
 
-The pre-built web app is committed in `frontend/dist`, so hosting (and running locally) works without Node.js.
+Data stored by the API (history, accounts) resets when the Space restarts.
+
+The pre-built web app is committed in `frontend/dist`, so the Space (and running locally) works without Node.js.
 Rebuild it with `npm run build` in `frontend/` after changing the UI.
 
 **Any other Docker host** (Render, Railway, Fly.io, a VPS):
