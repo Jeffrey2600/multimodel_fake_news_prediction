@@ -1,5 +1,9 @@
 import type { HistoryRow, Report, StepEvent, User } from './types'
 
+/** Where the API lives. Empty = same server as the website; set VITE_API_BASE when the site is hosted
+ *  separately (e.g. the website on Netlify, the API on Hugging Face). */
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+
 function clientId(): string {
   try {
     let id = localStorage.getItem('tl-client')
@@ -38,7 +42,7 @@ function headers(extra: Record<string, string> = {}) {
 }
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const r = await fetch(path, { ...init, headers: headers(init.headers as Record<string, string>) })
+  const r = await fetch(API_BASE + path, { ...init, headers: headers(init.headers as Record<string, string>) })
   if (!r.ok) {
     let msg = `Request failed (${r.status})`
     try {
@@ -68,7 +72,7 @@ export async function verify(
   if (input.kind === 'url') fd.append('url', input.url)
   if (input.kind === 'file') fd.append('file', input.file)
 
-  const r = await fetch('/api/verify', { method: 'POST', body: fd, headers: headers(), signal })
+  const r = await fetch(API_BASE + '/api/verify', { method: 'POST', body: fd, headers: headers(), signal })
   if (!r.ok || !r.body) {
     let msg = `The check couldn't start (${r.status}).`
     try {

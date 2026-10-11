@@ -1,0 +1,20 @@
+# Netlify hosts the website; the fact-checking API runs on the Hugging Face Space.
+[build]
+  base = "frontend"
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  VITE_API_BASE = "https://jeffrey2600-truthlens.hf.space"
+
+# Single-page app: every page address (/history, /r/<id>, /s/<share id>…) loads the app.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

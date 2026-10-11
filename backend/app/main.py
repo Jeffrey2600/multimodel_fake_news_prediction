@@ -1,4 +1,5 @@
 import json
+import os
 import logging
 import time
 from pathlib import Path
@@ -30,8 +31,15 @@ async def _thread_pool():
     from concurrent.futures import ThreadPoolExecutor
 
     asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=48))
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-                   allow_methods=["*"], allow_headers=["*"])
+# The website may be hosted separately (e.g. on Netlify) and call this API directly.
+_extra_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", *_extra_origins],
+    allow_origin_regex=r"https://([a-z0-9-]+--)?[a-z0-9-]+\.netlify\.app",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 db.init()
 
 
