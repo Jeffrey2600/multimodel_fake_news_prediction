@@ -90,8 +90,14 @@ def _retryable(e: Exception) -> bool:
     return any(c in s for c in ("429", "500", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "overloaded", "DEADLINE"))
 
 
+# Longest any single AI step may take in total, across every model it tries. Without this an
+# overloaded service could make one check wait many minutes before giving up.
+CHAIN_BUDGET = 150
+
+
 async def _generate(contents, cfg: types.GenerateContentConfig, light=False, timeout=60, prefer=None, only=False):
     loop = asyncio.get_running_loop()
+    deadline = loop.time() + CHAIN_BUDGET
     last = None
     chain = await _chain(light)
     if prefer and prefer in await _available_models():
@@ -101,11 +107,13 @@ async def _generate(contents, cfg: types.GenerateContentConfig, light=False, tim
             ck = f"{ki}:{model}"
             if _cooldown.get(ck, 0) > loop.time():
                 continue
+            if loop.time() > deadline - 5:
+                raise LLMUnavailable(f"AI service too slow right now (last error: {last})")
             for attempt in range(2):
                 try:
                     resp = await asyncio.wait_for(
                         cl.aio.models.generate_content(model=model, contents=contents, config=cfg),
-                        timeout=timeout,
+                        timeout=max(5, min(timeout, deadline - loop.time())),
                     )
                     return resp, model
                 except Exception as e:

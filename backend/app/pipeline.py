@@ -10,6 +10,7 @@ from typing import AsyncIterator
 
 from . import analysis, claims as claims_mod, llm, retrieval
 from .preprocess import Prepared
+from .security import InputError
 
 log = logging.getLogger("truthlens.pipeline")
 
@@ -41,7 +42,11 @@ async def run(prep: Prepared) -> AsyncIterator[dict]:
     # ---- evidence retrieval
     yield ev("evidence", "active", "Searching news, the web and reference sources")
     many = len(claim_list) > 2
-    evidence = await asyncio.gather(*[retrieval.gather_evidence(c, use_llm, many) for c in claim_list])
+    try:
+        evidence = await asyncio.wait_for(
+            asyncio.gather(*[retrieval.gather_evidence(c, use_llm, many) for c in claim_list]), 150)
+    except asyncio.TimeoutError:
+        raise InputError("Searching for evidence took too long — news sites may be slow right now. Try again in a minute.")
     n_src = sum(len(e["items"]) for e in evidence)
     grounded_ok = any(e["brief"] for e in evidence)
     yield ev("evidence", "done", f"{n_src} sources collected" + (" · live Google grounding" if grounded_ok else ""))

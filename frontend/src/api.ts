@@ -72,7 +72,14 @@ export async function verify(
   if (input.kind === 'url') fd.append('url', input.url)
   if (input.kind === 'file') fd.append('file', input.file)
 
-  const r = await fetch(API_BASE + '/api/verify', { method: 'POST', body: fd, headers: headers(), signal })
+  const lost = "Lost the connection to the checking server. Check your internet connection and try again."
+  let r: Response
+  try {
+    r = await fetch(API_BASE + '/api/verify', { method: 'POST', body: fd, headers: headers(), signal })
+  } catch (e) {
+    if (signal?.aborted) throw e
+    throw new Error(lost)
+  }
   if (!r.ok || !r.body) {
     let msg = `The check couldn't start (${r.status}).`
     try {
@@ -86,7 +93,14 @@ export async function verify(
   const dec = new TextDecoder()
   let buf = ''
   for (;;) {
-    const { value, done } = await reader.read()
+    let chunk: ReadableStreamReadResult<Uint8Array>
+    try {
+      chunk = await reader.read()
+    } catch (e) {
+      if (signal?.aborted) throw e
+      throw new Error(lost)
+    }
+    const { value, done } = chunk
     if (done) break
     buf += dec.decode(value, { stream: true })
     let i

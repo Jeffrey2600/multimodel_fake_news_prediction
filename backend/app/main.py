@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import logging
@@ -112,6 +113,7 @@ async def status():
 
 
 # ------------------------------------------------------------------ verify
+MAX_CHECK_SECONDS = 330
 @app.post("/api/verify", dependencies=[Depends(verify_limiter)])
 async def verify(
     kind: str = Form(...),
@@ -144,13 +146,10 @@ async def verify(
     uid, cid = who
     vid = db.create_verification(ftype or kind, label, uid, cid)
 
-    async def stream():
-        def line(o):
-            return json.dumps(o) + "\n"
-
-        yield line({"type": "start", "id": vid})
+    async def work(out: asyncio.Queue):
+        """Runs the check and puts each progress event on the queue (None marks the end)."""
         try:
-            yield line(pipeline.ev("read", "active", {
+            await out.put(pipeline.ev("read", "active", {
                 "text": "Reading your text", "url": "Fetching the article",
                 "image": "Reading text from the image (OCR)", "document": "Extracting the document text",
                 "audio": "Transcribing the recording", "video": "Transcribing audio and sampling frames",
@@ -175,14 +174,45 @@ async def verify(
                     rep["created_at"] = db.now()
                     rep["input"]["label"] = label
                     db.save_report(vid, rep)
-                yield line(event)
+                await out.put(event)
         except InputError as e:
             db.fail_verification(vid)
-            yield line({"type": "error", "message": str(e)})
+            await out.put({"type": "error", "message": str(e)})
         except Exception as e:
             log.exception("verification %s failed", vid)
             db.fail_verification(vid)
-            yield line({"type": "error", "message": f"The check stopped unexpectedly ({type(e).__name__}). Try again in a minute."})
+            await out.put({"type": "error", "message": f"The check stopped unexpectedly ({type(e).__name__}). Try again in a minute."})
+        finally:
+            await out.put(None)
+
+    async def stream():
+        def line(o):
+            return json.dumps(o) + "\n"
+
+        yield line({"type": "start", "id": vid})
+        out: asyncio.Queue = asyncio.Queue()
+        task = asyncio.create_task(work(out))
+        deadline = asyncio.get_running_loop().time() + MAX_CHECK_SECONDS
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(out.get(), 15)
+                except asyncio.TimeoutError:
+                    if asyncio.get_running_loop().time() > deadline:
+                        task.cancel()
+                        db.fail_verification(vid)
+                        yield line({"type": "error", "message": "This check took too long — the AI service is very busy "
+                                                                "right now. Please try again in a minute."})
+                        return
+                    # keep-alive: hosting proxies close connections that stay silent too long
+                    yield line({"type": "ping"})
+                    continue
+                if event is None:
+                    return
+                yield line(event)
+        finally:
+            if not task.done():
+                task.cancel()
 
     return StreamingResponse(stream(), media_type="application/x-ndjson",
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
